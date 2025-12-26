@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>For Manao</title>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Sarabun:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #020202; /* พื้นหลังเกือบดำสนิท */
+            overflow: hidden;
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        /* Canvas พื้นที่วาดพลุ */
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* เพิ่มความฟุ้งให้แสงใน Canvas */
+            filter: blur(0.5px) contrast(1.2); 
+        }
+
+        /* หน้าจอกดเริ่ม */
+        #start-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(circleAt center, #2a002a 0%, #000000 100%);
+            z-index: 999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+            cursor: pointer;
+            transition: opacity 0.8s ease-in-out;
+        }
+
+        #start-screen h1 {
+            font-size: 1.8rem;
+            text-shadow: 0 0 15px rgba(255,105,180, 0.7);
+            animation: pulse 1.5s infinite alternate;
+        }
+
+        /* ชื่อ manao */
+        #name-container {
+            position: absolute;
+            top: 35%; 
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            z-index: 10;
+            opacity: 0;
+            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* เอฟเฟกต์เด้งออก */
+            text-align: center;
+            width: 100%;
+            pointer-events: none;
+        }
+
+        #name-container.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .glowing-text {
+            font-family: 'Dancing Script', cursive;
+            font-size: 7rem; /* ใหญ่ขึ้น */
+            color: #fff;
+            /* แสงนีออนจัดเต็ม */
+            text-shadow: 
+                0 0 5px #fff,
+                0 0 20px #ff00de,
+                0 0 40px #ff00de,
+                0 0 80px #ff00de,
+                0 0 120px #ff00de;
+            margin: 0;
+        }
+
+        /* จอวาบขาว */
+        #flash-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 50; opacity: 0; pointer-events: none;
+            transition: opacity 0.1s ease-out;
+        }
+
+        /* กล่องข้อความ + รูป */
+        #content-box {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 55%;
+            z-index: 20;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-end;
+            padding-bottom: 40px;
+            opacity: 0;
+            transform: translateY(100px);
+            transition: all 2s ease-out;
+        }
+
+        #content-box.visible {
+            opacity: 1; transform: translateY(0);
+        }
+
+        .love-msg {
+            font-size: 2.8rem; color: white; font-weight: 600;
+            margin-bottom: 25px;
+            text-shadow: 0 0 15px rgba(255,192,203, 0.9);
+        }
+
+        .photo-frame {
+            position: relative;
+            padding: 6px;
+            /* กรอบไล่สีรุ้งหมุนๆ */
+            background: linear-gradient(rgba(255,0,222,1), rgba(0,219,222,1));
+            border-radius: 22px;
+            box-shadow: 0 0 40px rgba(255,0,222,0.4);
+            animation: hue-rotate 5s linear infinite;
+        }
+
+        .couple-photo {
+            display: block; width: 260px; height: 320px;
+            object-fit: cover; border-radius: 16px; border: 4px solid white;
+        }
+
+        @keyframes pulse { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.05); opacity: 1; }}
+        @keyframes hue-rotate { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); }}
+
+        @media (max-width: 600px) {
+            .glowing-text { font-size: 4.5rem; }
+            .love-msg { font-size: 2rem; }
+            .couple-photo { width: 220px; height: 280px; }
+            #name-container { top: 32%; }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="bg-music" loop><source src="song.mp3" type="audio/mpeg"></audio>
+
+    <div id="start-screen" onclick="startShow()">
+        <h1>✨ แตะเพื่อเริ่มเซอร์ไพรส์ ✨</h1>
+        <p style="font-size: 0.9rem; margin-top:15px; opacity: 0.8;">(เปิดเสียงเพื่อความฟิน)</p>
+    </div>
+
+    <div id="flash-overlay"></div>
+    <canvas id="canvas"></canvas>
+
+    <div id="name-container">
+        <h1 class="glowing-text">manao</h1>
+    </div>
+
+    <div id="content-box">
+        <div class="love-msg">รักเธอนะ ❤️</div>
+        <div class="photo-frame">
+            <img src="photo.jpg" alt="Us" class="couple-photo">
+        </div>
+    </div>
+
+    <script>
+        // --- Canvas Setup (ปรับให้คมชัดขึ้นบนจอ Retina) ---
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        let cw, ch;
+        const pixelRatio = window.devicePixelRatio || 1;
+
+        function resize() {
+            cw = window.innerWidth;
+            ch = window.innerHeight;
+            canvas.width = cw * pixelRatio;
+            canvas.height = ch * pixelRatio;
+            canvas.style.width = cw + 'px';
+            canvas.style.height = ch + 'px';
+            ctx.scale(pixelRatio, pixelRatio);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Settings ---
+        let fireworks = [];
+        let particles = [];
+        let hue = 0; // เริ่มต้นที่สีแดง แล้วค่อยๆ ไล่สี
+        let timerTick = 0;
+        let mode = 0; // 0=Wait, 1=Rapid, 2=BigBangWait, 3=Chill
+
+        // --- Firework Rocket (ตัวยิงขึ้นฟ้า) ---
+        class Firework {
+            constructor(sx, sy, tx, ty, isSpecial = false) {
+                this.x = sx; this.y = sy; this.sx = sx; this.sy = sy;
+                this.tx = tx; this.ty = ty;
+                this.distanceToTarget = Math.hypot(tx - sx, ty - sy);
+                this.distanceTraveled = 0;
+                this.coordinates = [];
+                this.coordinateCount = 4; // หางยาวขึ้นนิดนึง
+                while (this.coordinateCount--) this.coordinates.push([this.x, this.y]);
+                this.angle = Math.atan2(ty - sy, tx - sx);
+                this.speed = isSpecial ? 3 : 2.5; // ลูกพิเศษยิงเร็วขึ้น
+                this.acceleration = 1.04;
+                this.brightness = Math.random() * 30 + 70; // สว่างขึ้น
+                this.targetRadius = 1;
+                this.isSpecial = isSpecial;
+            }
+
+            update(index) {
+                this.coordinates.pop();
+                this.coordinates.unshift([this.x, this.y]);
+                this.speed *= this.acceleration;
+                const vx = Math.cos(this.angle) * this.speed;
+                const vy = Math.sin(this.angle) * this.speed;
+                this.distanceTraveled = Math.hypot(this.sx - (this.x + vx), this.sy - (this.y + vy));
+
+                if (this.distanceTraveled >= this.distanceToTarget) {
+                    createParticles(this.tx, this.ty, this.isSpecial);
+                    fireworks.splice(index, 1);
+                    if (this.isSpecial) triggerBigBangEffect();
+                } else {
+                    this.x += vx; this.y += vy;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
+                ctx.lineWidth = this.isSpecial ? 4 : 2;
+                // เพิ่มแสงฟุ้งที่หัวจรวด
+                ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle;
+                ctx.stroke();
+                ctx.shadowBlur = 0; // Reset
+            }
+        }
+
+        // --- Particle (สะเก็ดระเบิด) - ส่วนสำคัญที่ทำให้สวย ---
+        class Particle {
+            constructor(x, y, isSpecial) {
+                this.x = x; this.y = y;
+                this.coordinates = [];
+                // ลูกใหญ่หางยาว ลูกเล็กหางสั้น
+                this.coordinateCount = isSpecial ? 12 : 6; 
+                while (this.coordinateCount--) this.coordinates.push([this.x, this.y]);
+                
+                this.angle = Math.random() * Math.PI * 2;
+                // เพิ่มความเร็วการกระจายตัว (ทำให้วงใหญ่ขึ้น)
+                this.speed = Math.random() * (isSpecial ? 22 : 16) + 3; 
+                this.friction = 0.94; // แรงต้านอากาศ (ยิ่งน้อยยิ่งไปไกล)
+                this.gravity = 1.2;   // แรงดึงดูด (ทำให้โค้งลงสวยๆ)
+                
+                // สุ่มสีใกล้เคียงกันเพื่อให้ดูมีมิติ
+                this.hue = Math.random() * 30 + hue - 15; 
+                this.brightness = Math.random() * 40 + 60;
+                this.alpha = 1;
+                // อัตราการจางหาย (ยิ่งน้อยยิ่งอยู่นาน)
+                this.decay = Math.random() * 0.01 + (isSpecial ? 0.005 : 0.008);
+                
+                // เพิ่มลูกเล่น: ขนาดไม่เท่ากัน และบางลูกกะพริบได้
+                this.size = Math.random() * 2 + 1; 
+                this.sparkle = Math.random() < 0.5; // โอกาส 50% ที่จะกะพริบ
+            }
+
+            update(index) {
+                this.coordinates.pop();
+                this.coordinates.unshift([this.x, this.y]);
+                this.speed *= this.friction;
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed + this.gravity;
+                this.alpha -= this.decay;
+                if (this.alpha <= this.decay) particles.splice(index, 1);
+            }
+
+            draw() {
+                // คำนวณการกะพริบ (Sparkle Effect)
+                let flicker = this.sparkle ? (Math.random() * 20 - 10) : 0;
+                let currentBrightness = this.brightness + flicker;
+
+                ctx.beginPath();
+                // วาดหาง
+                ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
+                ctx.lineTo(this.x, this.y);
+                // ใช้สีแบบ HSLA เพื่อคุมความสว่างและความโปร่งใส
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, ${currentBrightness}%, ${this.alpha})`;
+                ctx.lineWidth = this.size / 1.5;
+                ctx.stroke();
+                
+                // วาดหัวสะเก็ดไฟให้ดูเป็นเม็ดๆ และมีแสงฟุ้ง
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${this.hue}, 100%, ${currentBrightness + 10}%, ${this.alpha})`;
+                // Glow Effect หัวใจสำคัญของความระยิบระยับ
+                ctx.shadowBlur = 15 * this.alpha; 
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+            }
+        }
+
+        // ฟังก์ชันสร้างสะเก็ดระเบิด (เพิ่มจำนวนมหาศาล)
+        function createParticles(x, y, isSpecial) {
+            // ถ้าเป็นลูกพิเศษจัดไป 400 เม็ด, ลูกธรรมดา 120 เม็ด
+            let particleCount = isSpecial ? 400 : 120; 
+            while (particleCount--) {
+                particles.push(new Particle(x, y, isSpecial));
+            }
+        }
+
+        // --- Animation Loop ---
+        function loop() {
+            requestAnimationFrame(loop);
+            hue += 0.8; // เปลี่ยนสีเร็วขึ้นนิดนึง
+
+            // สร้างเอฟเฟกต์ภาพติดตา (Motion Trail)
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // ยิ่งค่าน้อย หางยิ่งยาว
+            ctx.fillRect(0, 0, cw, ch);
+            // ใช้ lighter เพื่อให้แสงซ้อนกันแล้วสว่างขึ้น (ดูเหมือนไฟ)
+            ctx.globalCompositeOperation = 'lighter';
+
+            for (let i = fireworks.length - 1; i >= 0; i--) { fireworks[i].draw(); fireworks[i].update(i); }
+            for (let i = particles.length - 1; i >= 0; i--) { particles[i].draw(); particles[i].update(i); }
+
+            timerTick++;
+            // Logic การปล่อยพลุตามโหมด
+            if (mode === 1) { // รัวๆ 6 วิแรก
+                if (timerTick % 8 === 0) // ยิงถี่ขึ้น
+                    fireworks.push(new Firework(cw/2 + (Math.random()-0.5)*200, ch, Math.random()*cw, Math.random()*ch/2.5));
+            } else if (mode === 3) { // ยิงชิลล์ๆ หลังจบ
+                if (timerTick % 45 === 0)
+                    fireworks.push(new Firework(Math.random()*cw, ch, Math.random()*cw, Math.random()*ch/3));
+            }
+        }
+
+        // --- Timeline การทำงาน ---
+        function startShow() {
+            const startScreen = document.getElementById('start-screen');
+            startScreen.style.opacity = 0;
+            setTimeout(() => startScreen.style.display = 'none', 800);
+            document.getElementById('bg-music').play().catch(()=>{});
+
+            mode = 1; // เริ่มยิงรัว
+            loop();
+
+            setTimeout(() => {
+                mode = 2; // หยุดรอ
+                setTimeout(() => {
+                    // ยิงลูกใหญ่พิเศษ!
+                    fireworks.push(new Firework(cw/2, ch, cw/2, ch * 0.3, true));
+                }, 1500);
+            }, 6000);
+        }
+
+        function triggerBigBangEffect() {
+            const flash = document.getElementById('flash-overlay');
+            flash.style.opacity = 0.8; setTimeout(() => flash.style.opacity = 0, 150);
+            
+            setTimeout(() => {
+                document.getElementById('name-container').classList.add('visible');
+                mode = 3;
+            }, 50);
+            setTimeout(() => document.getElementById('content-box').classList.add('visible'), 3500);
+        }
+    </script>
+</body>
+</html>
